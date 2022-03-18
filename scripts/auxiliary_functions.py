@@ -1,3 +1,4 @@
+from os import access
 import cv2
 from glob import glob
 import numpy as np
@@ -108,9 +109,12 @@ def check_accuracy(loader, model, device="cuda"):
             pixels += torch.numel(preds)
             dice_score += (2*(preds * y).sum() / (preds + y).sum() + 1e-8)
 
-    print(f"Got {correct}/{pixels} with acc {correct/pixels*100:.2f}")
-    print(f"Dice score: {dice_score/len(loader)}")
+    acc = correct/pixels*100
+    dice = dice_score/len(loader) * 100 
+    # print(f"Got {correct}/{pixels} with acc {acc:.2f}")
+    # print(f"Dice score: {dice}")
     model.train()
+    return acc, dice
 
 def save_predictions_as_img(loader, model, folder, device="cuda"):
     model.eval()
@@ -137,7 +141,8 @@ def perform_validation(model, optimizer, validation_loader, DEVICE):
         # save_checkpoint(checkpoint)
 
         # check accuracy
-        check_accuracy(validation_loader, model, device=DEVICE)
-
+        acc, dice = check_accuracy(validation_loader, model, device=DEVICE)
+        
         # print some examples to a folder
         # save_predictions_as_img(validation_loader, model, folder='outputs/images/prediction_images', device=DEVICE)
+        return acc, dice

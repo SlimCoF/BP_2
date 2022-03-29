@@ -24,6 +24,7 @@ dependencies:
   - azureml-core~=1.39.0
   - torchvision
   - tqdm
+  - segmentation_models_pytorch
 - pip
 - python-spams
 channels:

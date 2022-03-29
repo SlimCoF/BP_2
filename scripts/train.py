@@ -1,25 +1,30 @@
 import torch
 from tqdm import tqdm
-from auxiliary_functions import perform_validation
-from auxiliary_functions import check_accuracy
 import wandb
+import numpy as np
 
-VAL_RATIO = 20 # after 20% perform validation
+from scripts.auxiliary_functions import calculate_metrics
+
+import time
 
 def train(loader, validation_loader, model, optimizer, loss_fn, scaler, DEVICE, epoch):
     loop = tqdm(loader)
-    val = int(len(loop)/4);
+    val = int(len(loop)/5);
 
-    # data_valid, targets_valid = next(iter(validation_loader))
-    # data_valid = data_valid.to(device=DEVICE)
     validation_number = 1;
-
+    
     for batch_idx, (data, targets) in enumerate(loop):
         data = data.to(device=DEVICE)
-        targets = targets.float().unsqueeze(1).to(device=DEVICE)
+        targets = targets.to(device=DEVICE)
 
         # forward
         with torch.cuda.amp.autocast():
+            # CrossEntropyLoss - Requirements:
+            #   model output shape: [batch_size, class_n, height, width]
+            #   target shape: [batch_size, height, width] - elements [0 - (class_n - 1)]
+            # (Currently in use) DiceLoss - Requirements:
+            #   model outpus shape: [batch_size, class_n, height, width]
+            #   target shape: [batch_size, height, width] or [batch_size, class_n, height, width]
             predictions = model(data)
             loss_train = loss_fn(predictions, targets)
 
@@ -37,24 +42,29 @@ def train(loader, validation_loader, model, optimizer, loss_fn, scaler, DEVICE, 
         })
 
         if batch_idx%val == 0:
-            
+        
             # calculate train data acc and dice
-            acc_train , dice_train = check_accuracy(loader, model, DEVICE) 
-
-            # calculate validation data loss
-            # with torch.cuda.amp.autocast():
-            #     predictions_valid = model(data_valid)
-            #     targets_valid = targets_valid.float().unsqueeze(1).to(device=DEVICE)
-            #     loss_valid = loss_fn(predictions_valid, targets_valid)
+            # START TIME !!
+            start = time.time()
+            acc_train, dice_train  = calculate_metrics(loader, model, DEVICE) 
+            # END TIME !!
+            end = time.time()
+            print("\nACC/DICE TRAIN calculation time: ")
+            print(end - start)
 
             #calculate validation data acc and dice
-            acc_valid, dice_valid = perform_validation(model, optimizer, validation_loader, DEVICE)
+            # START TIME !!
+            start = time.time()
+            acc_valid, dice_valid = calculate_metrics(validation_loader, model, DEVICE)
+            # END TIME !!
+            end = time.time()
+            print("\ACC/DICE VALIDATION calculation time: ")
+            print(end - start)
 
             wandb.log({
                 "Epoch": epoch,
                 "Val": validation_number,
 
-                "Train Loss": loss_train,
                 "Train Acc": acc_train,
                 "Train Dice": dice_train,
 

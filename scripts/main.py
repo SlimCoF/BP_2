@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.optim as optim
 import wandb
+import segmentation_models_pytorch as smp
 
 from auxiliary_functions import *
 from dataset import CustomDataset
@@ -26,7 +27,7 @@ OFFSET = (128, 128)
 
 LEARNING_RATE = 1e-4
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 NUM_EPOCHS = 4
 NUM_WORKERS = 2
 IMAGE_HEIGHT = 256
@@ -54,6 +55,7 @@ wandb_config = dict(
 )
 if __name__ == '__main__':
 
+    print("!!!!!!!!!! DICE LOSS RUN !!!!!!!!!!!")
     print(f"Device: {DEVICE}")
 
     parser = argparse.ArgumentParser()
@@ -76,45 +78,43 @@ if __name__ == '__main__':
         os.mkdir('outputs/model_checkpoint')
         f = open('outputs/model_checkpoint/checkpoint.pth.tar', 'w')
     
-    # START TIME !!
-    start = time.time()
-    # Load raw images (aprox. 70s)
+    # Load raw images (aprox. 70s with K-80)
     images_train, masks_train = load_dataset(data_path)
-    # END TIME !!
-    end = time.time()
-    print("\nLoad images and masks time: ")
-    print(end - start)
+    
+    # Edit mask values (aprox. 10s with K-80)
+    masks_train = edit_masks(masks_train)
 
-    # Edit mask to binary values 0 - outside roi, 1 - tumor
-        # TODO: edit masks for predominant classes
-    for index in range(len(masks_train)):
-        masks_train[index][masks_train[index] != 1 ] = 0
-
-    # START TIME !!
-    start = time.time()
-    # Normalize images (aprox. 240s)
+    # Normalize images (aprox. 240s with K-80)
     images_train = normalize_images(images_train[0], images_train)
-    # END TIME !!
-    end = time.time()
-    print("\nNormalize images time: ")
-    print(end - start)
-
 
     # Output some normalized images
     # for index in range(len(images_train)):
         # if (index >= 10 and index%10 == 0):
             # cv2.imwrite(f'outputs/images/normalized/normalized_image{index}.png', images_train[index])
-        
+
     # Create tiles from images
-    images_train, masks_train = tiles_from_images(images_train[0:3], masks_train[0:3], TILE_SIZE, OFFSET)
+    images_train, masks_train = tiles_from_images(images_train, masks_train, TILE_SIZE, OFFSET)
 
     # Output some tiles
-    # for index in range(len(images_train)):
-        # if (index >= 10000 and index%10000 == 0):
-            # cv2.imwrite(f'outputs/images/tiles/tile{index}.png', images_train[index])
+    # for index in range(len(images_train[0:10])):
+    #     cv2.imwrite(f'outputs/images/tiles/tile{index}.png', images_train[index])
+    #     mask_to_write = masks_train[index]
+    #     mask_to_write[mask_to_write == 1] = 63
+    #     mask_to_write[mask_to_write == 2] = 126
+    #     mask_to_write[mask_to_write == 3] = 189
+    #     mask_to_write[mask_to_write == 4] = 252
+    #     cv2.imwrite(f'outputs/images/tiles/tile_mask{index}.png', mask_to_write)
+    
+    print(f"Size of train batch: {len(images_train)}")
 
-    print(f"Full length: {len(images_train)}")
-
+    all_unique = []
+    for mask in masks_train:
+        unique_pixels = np.unique(mask)
+        for pixel in unique_pixels:
+            if not (pixel in all_unique):
+                all_unique.append(pixel)
+    print(f"Number of unique ground truth values: {all_unique}")
+    
     # Create validation dataset
     images_validation = []
     masks_validation = []
@@ -152,43 +152,46 @@ if __name__ == '__main__':
                 shuffle=False
             )
 
-    print(train_loader)
-    print(validation_loader)
+    # Print some values to see if all values are how they should be 
+    batch = next(iter(train_loader))
+    images, masks = batch
+    print(f"IMAGEs SHAPEs: {images.shape}, MASKs SHAPEs: {masks.shape}, IMAGEs DTYPEs: {images.dtype}, MASKs DTYPEs: {masks.dtype}")
+    test_img = images[5]
+    test_mask = masks[5]
+    print(f"Random IMG min to max: {test_img.min()} - {test_img.max()}, Random MASK min to max: {test_mask.min()} - {test_mask.max()}\n")
 
     # set model, loss_fn, optimizer and scaler
-    model = U_net(input_channels=3, output_channels=1).to(DEVICE)
-    loss_fn = nn.BCEWithLogitsLoss()
+    model = U_net(input_channels=3, output_channels=5).to(DEVICE)
+    # loss_fn = nn.CrossEntropyLoss()
+    loss_fn = smp.losses.DiceLoss(mode="multiclass")
+    loss_fn.__name__ = 'Dice_loss'
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    
+    scaler = torch.cuda.amp.GradScaler()
+
     # load model if LOAD_MODEL==true
     if LOAD_MODEL:
         load_checkpoint(torch.load('outputs/model_checkpoint/checkpoint.pth.tar'), model)
     
-    scaler = torch.cuda.amp.GradScaler()
-
     # configure and launch w&b
     wandb.login(key=wandb_key)
     wandb_run = wandb.init(project=wandb_config['project'], entity=wandb_config['entity'])
     wandb.config.update(wandb_config)
     wandb.watch(model)
-    
+
     # Train the model
     for epoch in range(NUM_EPOCHS):
         train(train_loader, validation_loader, model, optimizer, loss_fn, scaler, DEVICE, epoch)
 
-        perform_validation(model, optimizer, validation_loader, DEVICE)
+        # save model
+        checkpoint = {
+            "state_dict": model.state_dict(),
+            "optimizer": optimizer.state_dict()
+        }
+        save_checkpoint(checkpoint)
 
-        # # save model
-        # checkpoint = {
-        #     "state_dict": model.state_dict(),
-        #     "optimizer": optimizer.state_dict()
-        # }
-        # save_checkpoint(checkpoint)
+        # calculate accuracy score
+        calculate_metrics(validation_loader, model, device=DEVICE)
 
-        # # check accuracy
-        # check_accuracy(validation_loader, model, device=DEVICE)
-
-        # # print some examples to a folder
-        # save_predictions_as_img(validation_loader, model, folder='outputs/images/prediction_images', device=DEVICE)
-
-
+        # print some examples to a folder
+        save_predictions_as_img(validation_loader, model, folder='outputs/images/prediction_images', device=DEVICE)
+    

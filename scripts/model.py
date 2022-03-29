@@ -4,6 +4,7 @@ import torch.nn as nn
 class Iteration(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
+        self.dropout = nn.Dropout(0.1)
         self.block = nn.Sequential(
             nn.Conv2d(input_channels, output_channels, 3, 1, 1, bias=False),
             nn.BatchNorm2d(output_channels),
@@ -14,14 +15,11 @@ class Iteration(nn.Module):
         ) 
 
     def forward(self, x):
-        return self.block(x)
-
-# class Encoder(Module):
-
-# class Decoder():
-
+        x = self.block(x)
+        return self.dropout(x)
+        
 class U_net(nn.Module):
-    def __init__(self, input_channels=3, output_channels=1, features=[64, 128, 256, 512]):
+    def __init__(self, input_channels=3, output_channels=5, features=[64, 128, 256, 512, 1024]):
         super(U_net, self).__init__()
         self.decoders = nn.ModuleList()
         self.encoders = nn.ModuleList()
@@ -63,16 +61,5 @@ class U_net(nn.Module):
             skip_connection = skip_connections[index//2]
             concat_skip = torch.cat((skip_connection, x), dim=1)
             x = self.decoders[index+1](concat_skip)
-            
+        
         return self.last_conv(x)
-
-# def test():
-#     x = torch.randn((3, 1, 256, 256))
-#     model = U_net(input_channels=1, output_channels=1)
-#     preds = model(x)
-#     print(preds.shape)
-#     print(x.shape)
-#     assert preds.shape == x.shape
-
-# if __name__ == "__main__":
-#     test()

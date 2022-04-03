@@ -70,14 +70,22 @@ if __name__ == '__main__':
         os.mkdir('outputs/images')
     if not os.path.isdir('outputs/images/normalized'):
         os.mkdir('outputs/images/normalized')
-    if not os.path.isdir('outputs/images/tiles'):
-        os.mkdir('outputs/images/tiles')
-    if not os.path.isdir('outputs/images/prediction_images'):
-        os.mkdir('outputs/images/prediction_images')
+    if not os.path.isdir('outputs/images/prediction_masks'):
+        os.mkdir('outputs/images/prediction_masks')
+    if not os.path.isdir('outputs/images/target_masks'):
+        os.mkdir('outputs/images/target_masks')
+    if not os.path.isdir('outputs/images/target_images'):
+        os.mkdir('outputs/images/target_images')
     if not os.path.isdir('outputs/model_checkpoint'):
         os.mkdir('outputs/model_checkpoint')
         f = open('outputs/model_checkpoint/checkpoint.pth.tar', 'w')
     
+    image_output_folders = {
+        "prediction_masks": "outputs/images/prediction_masks",
+        "target_masks":"outputs/images/target_masks",
+        "target_images":"outputs/images/target_images"
+    }
+
     # Load raw images (aprox. 70s with K-80)
     images_train, masks_train = load_dataset(data_path)
     
@@ -193,5 +201,5 @@ if __name__ == '__main__':
         calculate_metrics(validation_loader, model, device=DEVICE)
 
         # print some examples to a folder
-        save_predictions_as_img(validation_loader, model, folder='outputs/images/prediction_images', device=DEVICE)
+        save_predictions_as_img(validation_loader, model, folder=image_output_folders, device=DEVICE)
     

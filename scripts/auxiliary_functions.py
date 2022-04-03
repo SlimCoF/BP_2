@@ -214,9 +214,13 @@ def save_predictions_as_img(loader, model, folder, device="cuda"):
                 target_segment = target_mask*curr_color
                 target_output += target_segment
             
-            torchvision.utils.save_image(preds_output, f"{folder}/prediction_{index}.png")
-            torchvision.utils.save_image(target_output, f"{folder}/correct_{index}.png")
-
+            print(x.shape)
+            prediction_dir = folder["prediction_masks"]
+            target_dir = folder["target_masks"]
+            target_img_dir = folder["target_images"]
+            torchvision.utils.save_image(preds_output, f"{prediction_dir}/prediction_{index}.png")
+            torchvision.utils.save_image(target_output, f"{target_dir}/target_{index}.png")
+            torchvision.utils.save_image(x, f"{target_img_dir}/image_{index}.png")
         if index > 10:
             break
 

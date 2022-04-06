@@ -19,6 +19,8 @@ from dataset import CustomDataset
 from model import U_net
 from train import *
 
+import tmp as tmp
+
 import time
 
 # (HEIGHT, WIDTH)
@@ -85,6 +87,8 @@ if __name__ == '__main__':
         "target_masks":"outputs/images/target_masks",
         "target_images":"outputs/images/target_images"
     }
+
+    # tmp.get_means_and_stds(data_path)
 
     # Load raw images (aprox. 70s with K-80)
     images_train, masks_train = load_dataset(data_path)

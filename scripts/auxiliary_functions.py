@@ -18,15 +18,21 @@ def load_dataset(data_path):
     imgs_train_path = glob(data_path + '/train/images/*.png')
     masks_train_path = glob(data_path + '/train/masks/*.png')
     
-    for index in range(0, len(imgs_train_path[0:3])):
+    for index in range(0, len(imgs_train_path)):
         img_path = imgs_train_path[index]
         mask_path = masks_train_path[index]
         
         if os.path.basename(img_path) == os.path.basename(mask_path):
             mask = np.array(cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE))
             image = np.array(cv2.imread(img_path, cv2.IMREAD_COLOR))
-            masks.append(mask)
-            images.append(image)
+
+            # This image means and stds are best for Reinhard normalization
+            if os.path.basename(img_path) == "TCGA-D8-A27F-DX1_xmin98787_ymin6725_MPP-0.2500.png":
+                masks.insert(0, mask)
+                images.insert(0, image)
+            else:
+                masks.append(mask)
+                images.append(image)
         else:
             print("Image and Mask are not corresponding")
 
